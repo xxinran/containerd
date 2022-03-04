@@ -60,7 +60,7 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get sandbox container task")
 	}
-	sandboxPid := s.Pid()
+	sandboxPid := s.Pid() // infra's pid
 
 	// Generate unique id and name for the container and reserve the name.
 	// Reserve the container name to avoid concurrent `CreateContainer` request creating
@@ -103,7 +103,9 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 	}
 
 	// Run container using the same runtime with sandbox.
-	sandboxInfo, err := sandbox.Container.Info(ctx)
+	// sandboxInfo, err := sandbox.Container.Info(ctx) // runc
+	log.G(ctx).Debug("sandboxInfo.metadata =", sandbox.Metadata.RuntimeHandler) //fc
+
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get sandbox %q info", sandboxID)
 	}
@@ -150,6 +152,7 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 	mounts := c.containerMounts(sandboxID, config)
 
 	ociRuntime, err := c.getSandboxRuntime(sandboxConfig, sandbox.Metadata.RuntimeHandler)
+	log.G(ctx).Debugf("create app container with %q", ociRuntime)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get sandbox runtime")
 	}
@@ -232,13 +235,14 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 
 	containerLabels := buildLabels(config.Labels, image.ImageSpec.Config.Labels, containerKindContainer)
 
-	runtimeOptions, err := getRuntimeOptions(sandboxInfo)
+	//runtimeOptions, err := getRuntimeOptions(sandboxInfo)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get runtime options")
 	}
+
 	opts = append(opts,
 		containerd.WithSpec(spec, specOpts...),
-		containerd.WithRuntime(sandboxInfo.Runtime.Name, runtimeOptions),
+		containerd.WithRuntime(ociRuntime.Type, nil),
 		containerd.WithContainerLabels(containerLabels),
 		containerd.WithContainerExtension(containerMetadataExtension, &meta))
 	var cntr containerd.Container
